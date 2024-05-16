@@ -190,6 +190,7 @@ main(int argc, char **argv)
         fprintf(stderr, "pcap_open_live: %s\n", errbuf);
     }
 
+    pcap_set_promisc(pcap, 1);
     pcap_loop(pcap, -1, packet_handler, NULL);
     pcap_close(pcap);
     return 0;
