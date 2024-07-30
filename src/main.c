@@ -8,6 +8,44 @@
 #include "if_ether.h"
 #include "if_arp.h"
 
+#define LINE_LEN 16
+#define RUNFLAG_DUMP  (1 << 0)
+
+static int runflags = 0;
+
+static void
+hexdump_line(const void *data, size_t len)
+{
+    /* The amount of bytes we write */
+    const uint8_t BYTE_COUNT = 2;
+    const char *line = data;
+
+    printf("\t");
+    for (size_t i = 0; i < LINE_LEN; ++i) {
+        if (i < len) {
+            printf("%02X", line[i] & 0xFF);
+        } else {
+            printf("  ");
+        }
+
+        /* Put spacing between bytes */
+        if (((i + 1) % BYTE_COUNT) == 0) {
+            printf(" ");
+        }
+    }
+
+    printf(" ");
+    for (size_t i = 0; i < len; ++i) {
+        if (line[i] > 31 && line[i] < 127) {
+            printf("%c", line[i]);
+        } else {
+            printf(".");
+        }
+    }
+
+    printf("\n");
+}
+
 /*
  * Convert a MAC address to string.
  *
@@ -138,6 +176,7 @@ dump_ether(struct ether_hdr *ether)
     char *source, *dest;
     char *type;
     uint16_t proto_id;
+    size_t psize = 0;
     void *packet;
 
     packet = (char *)ether + sizeof(struct ether_hdr);
@@ -148,10 +187,13 @@ dump_ether(struct ether_hdr *ether)
 
     switch (proto_id) {
     case PROTO_IPV4:
+        psize = sizeof(struct ipv4_hdr);
         dump_ipv4(packet, source, dest);
         break;
     case PROTO_ARP:
+        psize = sizeof(struct arp_hdr);
         type = "ARP";
+
         log_packet(type, source, dest);
         dump_arp(packet);
         break;
@@ -159,6 +201,12 @@ dump_ether(struct ether_hdr *ether)
         type = "???";
         log_packet(type, source, dest);
         break;
+    }
+
+    if ((runflags & RUNFLAG_DUMP) != 0) {
+        printf("\n");
+        hexdump_line(ether, sizeof(*ether));
+        hexdump_line(packet, psize);
     }
 
     printf("]\n");
@@ -188,10 +236,13 @@ main(int argc, char **argv)
     }
 
     /* Parse the arguments */
-    while ((c = getopt(argc, argv, "i:")) != -1) {
+    while ((c = getopt(argc, argv, "i:d")) != -1) {
         switch (c) {
         case 'i':
             snprintf(iface, sizeof(iface), "%s", optarg);
+            break;
+        case 'd':
+            runflags |= RUNFLAG_DUMP;
             break;
         default:
             return -1;
