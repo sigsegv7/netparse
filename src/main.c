@@ -1,10 +1,10 @@
 #include <stdio.h>
-#include <pcap/pcap.h>
-#include <arpa/inet.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <pcap/pcap.h>
+#include <arpa/inet.h>
 #include "if_ether.h"
 #include "if_arp.h"
 
