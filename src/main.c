@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <assert.h>
 #include "if_ether.h"
 #include "if_arp.h"
@@ -176,15 +177,28 @@ packet_handler(u_char *user, const struct pcap_pkthdr *hdr, const u_char *bytes)
 int
 main(int argc, char **argv)
 {
+    char iface[16];
     char errbuf[PCAP_ERRBUF_SIZE];
+    char c;
     pcap_t *pcap;
 
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <iface>\n", argv[0]);
+        fprintf(stderr, "Usage: %s -i <iface> <flags>\n", argv[0]);
         return 1;
     }
 
-    pcap = pcap_open_live(argv[1], 65535, 1, 100, errbuf);
+    /* Parse the arguments */
+    while ((c = getopt(argc, argv, "i:")) != -1) {
+        switch (c) {
+        case 'i':
+            snprintf(iface, sizeof(iface), "%s", optarg);
+            break;
+        default:
+            return -1;
+        }
+    }
+
+    pcap = pcap_open_live(iface, 65535, 1, 100, errbuf);
     if (pcap == NULL) {
         fprintf(stderr, "pcap_open_live: %s\n", errbuf);
         return -1;
