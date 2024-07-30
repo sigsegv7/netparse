@@ -187,6 +187,7 @@ main(int argc, char **argv)
     pcap = pcap_open_live(argv[1], 65535, 1, 100, errbuf);
     if (pcap == NULL) {
         fprintf(stderr, "pcap_open_live: %s\n", errbuf);
+        return -1;
     }
 
     pcap_set_promisc(pcap, 1);
