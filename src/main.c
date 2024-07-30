@@ -237,6 +237,7 @@ packet_handler(u_char *user, const struct pcap_pkthdr *hdr, const u_char *bytes)
 int
 main(int argc, char **argv)
 {
+    short have_iface = 0;
     char iface[16];
     char errbuf[PCAP_ERRBUF_SIZE];
     char c;
@@ -252,6 +253,7 @@ main(int argc, char **argv)
         switch (c) {
         case 'i':
             snprintf(iface, sizeof(iface), "%s", optarg);
+            have_iface = 1;
             break;
         case 'd':
             runflags |= RUNFLAG_DUMP;
@@ -262,6 +264,13 @@ main(int argc, char **argv)
         default:
             return -1;
         }
+    }
+
+    /* Check if we have an interface passed */
+    if (!have_iface) {
+        fprintf(stderr, "No interface specified!\n");
+        help(argv);
+        return -1;
     }
 
     pcap = pcap_open_live(iface, 65535, 1, 100, errbuf);
