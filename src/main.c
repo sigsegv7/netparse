@@ -14,6 +14,18 @@
 static int runflags = 0;
 
 static void
+help(char **argv)
+{
+    const char *opstr =
+        " -h, help\n"
+        " -i, interface\n"
+        " -d, hexdump\n";
+
+    fprintf(stderr, "Usage: %s -i <iface> <flags>\n", argv[0]);
+    fprintf(stderr, opstr);
+}
+
+static void
 hexdump_line(const void *data, size_t len)
 {
     /* The amount of bytes we write */
@@ -231,12 +243,12 @@ main(int argc, char **argv)
     pcap_t *pcap;
 
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s -i <iface> <flags>\n", argv[0]);
+        help(argv);
         return 1;
     }
 
     /* Parse the arguments */
-    while ((c = getopt(argc, argv, "i:d")) != -1) {
+    while ((c = getopt(argc, argv, "i:dh")) != -1) {
         switch (c) {
         case 'i':
             snprintf(iface, sizeof(iface), "%s", optarg);
@@ -244,6 +256,9 @@ main(int argc, char **argv)
         case 'd':
             runflags |= RUNFLAG_DUMP;
             break;
+        case 'h':
+            help(argv);
+            return 0;
         default:
             return -1;
         }
