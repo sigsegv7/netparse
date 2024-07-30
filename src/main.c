@@ -22,12 +22,12 @@ mac_to_str(uint8_t mac[HW_ADDR_LEN])
     assert(addrstr != NULL);
 
     snprintf(addrstr, MAX_BUF_LEN, "%X:%X:%X:%X:%X:%X",
-             ntohs(mac[0]) >> 8,
-             ntohs(mac[1]) >> 8,
-             ntohs(mac[2]) >> 8,
-             ntohs(mac[3]) >> 8,
-             ntohs(mac[4]) >> 8,
-             ntohs(mac[5]) >> 8);
+        ntohs(mac[0]) >> 8,
+        ntohs(mac[1]) >> 8,
+        ntohs(mac[2]) >> 8,
+        ntohs(mac[3]) >> 8,
+        ntohs(mac[4]) >> 8,
+        ntohs(mac[5]) >> 8);
 
     return addrstr;
 
@@ -48,10 +48,10 @@ ip_to_str(uint8_t ip[IPV4_LEN])
     assert(addrstr != NULL);
 
     snprintf(addrstr, MAX_BUF_LEN, "%d.%d.%d.%d",
-             ntohs(ip[0]) >> 8,
-             ntohs(ip[1]) >> 8,
-             ntohs(ip[2]) >> 8,
-             ntohs(ip[3]) >> 8);
+        ntohs(ip[0]) >> 8,
+        ntohs(ip[1]) >> 8,
+        ntohs(ip[2]) >> 8,
+        ntohs(ip[3]) >> 8);
 
     return addrstr;
 
@@ -90,8 +90,7 @@ static inline void
 log_packet(char *type, char *source, char *dest)
 {
     printf("%s [\n"
-           "\t%s (source) -> %s (dest)\n",
-           type, source, dest);
+        "\t%s (source) -> %s (dest)\n", type, source, dest);
 }
 
 /*
