@@ -3,15 +3,39 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <ctype.h>
 #include <pcap/pcap.h>
 #include <arpa/inet.h>
 #include "if_ether.h"
 #include "if_arp.h"
 
 #define LINE_LEN 16
-#define RUNFLAG_DUMP  (1 << 0)
+#define RUNFLAG_DUMP    (1 << 0)
+#define RUNFLAG_FILTER  (1 << 1)
 
+/* Filters */
+typedef enum {
+    FILTER_IPV4,
+    FILTER_ARP,
+    FILTER__MAX
+} filter_t;
+
+struct filter_op {
+    void(*log)(void *hdr, char *srcmac, char *destmac);
+    char *filter_name;
+};
+
+static void dump_ipv4(void *hdr, char *source_mac, char *dest_mac);
+static void dump_arp(void *hdr, char *source_mac, char *dest_mac);
+
+static char filter[16];
 static int runflags = 0;
+
+/* Filter table */
+static struct filter_op protos[] = {
+    [FILTER_IPV4] = { dump_ipv4, "ipv4" },
+    [FILTER_ARP]  = { dump_arp, "arp" }
+};
 
 static void
 help(char **argv)
@@ -19,10 +43,47 @@ help(char **argv)
     const char *opstr =
         " -h, help\n"
         " -i, interface\n"
-        " -d, hexdump\n";
+        " -d, hexdump\n"
+        " -f, layer 2 filtering\n\n"
+        " filters:\n"
+        " arp, ipv4\n";
 
     fprintf(stderr, "Usage: %s -i <iface> <flags>\n", argv[0]);
     fprintf(stderr, opstr);
+}
+
+/*
+ * Attempt filtering.
+ *
+ * Returns -1 if filtering is not enabled with '-f',
+ * returns 0 if not in fitler, and returns non-zero
+ * if protocol should be filtered out.
+ */
+static int
+try_filter(filter_t type, void *hdr, char *srcmac, char *destmac)
+{
+    struct filter_op *fp;
+
+    if ((runflags & RUNFLAG_FILTER) == 0)
+        return -1;
+    if (type >= FILTER__MAX)
+        return -1;
+
+    fp = &protos[type];
+    if (strcmp(fp->filter_name, filter) == 0) {
+        fp->log(hdr, srcmac, destmac);
+        return 1;
+    }
+
+    return 0;
+}
+
+static void
+strlower(char *s)
+{
+    for (char *p = s; *p != '\0'; ++p) {
+        *p = tolower(*p);
+    }
 }
 
 static void
@@ -108,20 +169,28 @@ ip_to_str(uint8_t ip[IPV4_LEN])
 
 }
 
+static inline void
+log_packet(char *type, char *source, char *dest)
+{
+    printf("%s:\t%s (source) -> %s (dest)\n", type, source, dest);
+}
+
 /*
  * Dump ARP header packet
  *
  * @arp: ARP header
  */
 static void
-dump_arp(struct arp_hdr *arp)
+dump_arp(void *hdr, char *src_mac, char *dest_mac)
 {
+    struct arp_hdr *arp = hdr;
     uint8_t op = ntohs(arp->oper);
     char *target_ip, *sender_ip;
     char *sender_mac;
 
     target_ip = ip_to_str(arp->target_ip);
     sender_ip = ip_to_str(arp->sender_ip);
+    log_packet("ARP", src_mac, dest_mac);
 
     switch (op) {
     case ARP_REQUEST:
@@ -135,13 +204,7 @@ dump_arp(struct arp_hdr *arp)
     }
 
     free(target_ip);
-}
-
-static inline void
-log_packet(char *type, char *source, char *dest)
-{
-    printf("%s [\n"
-        "\t%s (source) -> %s (dest)\n", type, source, dest);
+    printf("\n");
 }
 
 /*
@@ -150,8 +213,9 @@ log_packet(char *type, char *source, char *dest)
  * @ipv4: IPv4 headr
  */
 static void
-dump_ipv4(struct ipv4_hdr *ipv4, char *source_mac, char *dest_mac)
+dump_ipv4(void *hdr, char *source_mac, char *dest_mac)
 {
+    struct ipv4_hdr *ipv4 = hdr;
     char *dest_ip, *source_ip;
     char *type;
     uint8_t proto;
@@ -177,6 +241,7 @@ dump_ipv4(struct ipv4_hdr *ipv4, char *source_mac, char *dest_mac)
 
     free(dest_ip);
     free(source_ip);
+    printf("\n");
 }
 
 /*
@@ -185,6 +250,7 @@ dump_ipv4(struct ipv4_hdr *ipv4, char *source_mac, char *dest_mac)
 static inline void
 dump_ether(struct ether_hdr *ether)
 {
+    int tmp;
     char *source, *dest;
     char *type;
     uint16_t proto_id;
@@ -200,28 +266,40 @@ dump_ether(struct ether_hdr *ether)
     switch (proto_id) {
     case PROTO_IPV4:
         psize = sizeof(struct ipv4_hdr);
+        tmp = try_filter(FILTER_IPV4, packet, source, dest);
+        if (tmp >= 0) {
+            goto done;
+        }
+
         dump_ipv4(packet, source, dest);
         break;
     case PROTO_ARP:
-        psize = sizeof(struct arp_hdr);
-        type = "ARP";
+        tmp = try_filter(FILTER_ARP, packet, source, dest);
+        if (tmp >= 0) {
+            goto done;
+        }
 
-        log_packet(type, source, dest);
-        dump_arp(packet);
+        psize = sizeof(struct arp_hdr);
+        dump_arp(packet, source, dest);
         break;
     default:
+        /* Drop unknown packets if filtering */
+        if ((runflags & RUNFLAG_FILTER) != 0) {
+            goto done;
+        }
+
         type = "???";
         log_packet(type, source, dest);
         break;
     }
 
     if ((runflags & RUNFLAG_DUMP) != 0) {
-        printf("\n");
         hexdump_line(ether, sizeof(*ether));
         hexdump_line(packet, psize);
+        printf("\n");
     }
 
-    printf("]\n");
+done:
     free(source);
     free(dest);
 }
@@ -249,7 +327,7 @@ main(int argc, char **argv)
     }
 
     /* Parse the arguments */
-    while ((c = getopt(argc, argv, "i:dh")) != -1) {
+    while ((c = getopt(argc, argv, "i:dhf:")) != -1) {
         switch (c) {
         case 'i':
             snprintf(iface, sizeof(iface), "%s", optarg);
@@ -257,6 +335,10 @@ main(int argc, char **argv)
             break;
         case 'd':
             runflags |= RUNFLAG_DUMP;
+            break;
+        case 'f':
+            snprintf(filter, sizeof(filter), "%s", optarg);
+            runflags |= RUNFLAG_FILTER;
             break;
         case 'h':
             help(argv);
