@@ -166,7 +166,6 @@ ip_to_str(uint8_t ip[IPV4_LEN])
         ntohs(ip[3]) >> 8);
 
     return addrstr;
-
 }
 
 static inline void
